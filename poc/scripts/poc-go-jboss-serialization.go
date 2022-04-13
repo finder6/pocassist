@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/jweny/pocassist/pkg/cel/proto"
 	"github.com/jweny/pocassist/pkg/util"
 	"github.com/valyala/fasthttp"
@@ -28,6 +29,12 @@ func JBossJavaSerializationVul(args *ScriptScanArgs) (*util.ScanResult, error) {
 	fastReq.SetBody([]byte(jbossJavaSerializationPayload))
 
 	rawUrl := ConstructUrl(args, "/invoker/JMXInvokerServlet")
+	if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+		curHost := args.Host + ":" + fmt.Sprint(args.Port)
+		fastReq.Header.Set("Host", curHost)
+		fastReq.SetHost(curHost)
+		fastReq.SetRequestURI("/invoker/JMXInvokerServlet")
+	}
 	resp, err := util.DoFasthttpRequest(fastReq, true)
 
 	if err != nil {

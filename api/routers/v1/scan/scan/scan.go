@@ -159,6 +159,86 @@ func Raw(c *gin.Context) {
 	return
 }
 
+// @Summary scan raw
+// @Tags Scan
+// @Description 传文件：请求报文
+// @Accept multipart/form-data
+// @Param type formData string true "扫描类型：multi / all"
+// @Param vul_list formData swaggerArray false "vul_id 列表"
+// @Param remarks formData string false "备注"
+// @Param target formData file true "file"
+// @accept json
+// @Success 200 {object} msg.Response
+// @Failure 200 {object} msg.Response
+// @Router /api/v1/scan/raw [post]
+func PassiveRaw(c *gin.Context) {
+	scanType := c.PostForm("type")
+	vulList := c.PostFormArray("vul_list")
+	remarks := c.PostForm("remarks")
+
+	if scanType != "multi" && scanType != "all" {
+		c.JSON(msg.ErrResp("扫描类型为multi或all"))
+		return
+	}
+
+	target, err := c.FormFile("target")
+	if err != nil {
+		c.JSON(msg.ErrResp("文件上传失败"))
+		return
+	}
+
+	targetReader, err := target.Open()
+	if err != nil {
+		c.JSON(msg.ErrResp("文件流打开失败"))
+		return
+	}
+	defer targetReader.Close()
+
+	oreq, err := http.ReadRequest(bufio.NewReader(targetReader))
+	if err != nil || oreq == nil {
+		c.JSON(msg.ErrResp("生成原始请求失败"))
+		return
+	}
+	if !oreq.URL.IsAbs() {
+		scheme := "http"
+		oreq.URL.Scheme = scheme
+		oreq.URL.Host = oreq.Host
+	}
+
+	plugins, err := rule.LoadDbPlugin(scanType, vulList)
+	if err != nil || plugins == nil {
+		c.JSON(msg.ErrResp("插件加载失败" + err.Error()))
+		return
+	}
+
+	oReqUrl := oreq.URL.String()
+
+	token := c.Request.Header.Get("Authorization")
+	claims, _ := util.ParseToken(token)
+	username := ""
+	if claims == nil {
+		username = ""
+	} else {
+		username = claims.Username
+	}
+
+	task := db.Task{
+		Operator: username,
+		Remarks:  remarks,
+		Target:   oReqUrl,
+	}
+	db.AddTask(&task)
+	taskItem := &rule.TaskItem{
+		OriginalReq: oreq,
+		Plugins:     plugins,
+		Task:        &task,
+	}
+
+	c.JSON(msg.SuccessResp("任务下发成功"))
+	go rule.TaskProducer(taskItem)
+	go rule.TaskConsumer()
+	return
+}
 
 // @Summary scan list
 // @Tags Scan

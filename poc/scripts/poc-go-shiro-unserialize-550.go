@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
+	"fmt"
 	"github.com/jweny/pocassist/pkg/cel/proto"
 	reverse2 "github.com/jweny/pocassist/pkg/cel/reverse"
 	"github.com/jweny/pocassist/pkg/util"
@@ -77,6 +78,12 @@ func ShiroJavaUnserilize(args *ScriptScanArgs) (*util.ScanResult, error) {
 		cookies = append(cookies, []string{"rememberMe", rememberme})
 		for i := range cookies {
 			fastReq.Header.SetCookie(cookies[i][0], cookies[i][1])
+		}
+
+		if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+			curHost := args.Host + ":" + fmt.Sprint(args.Port)
+			fastReq.Header.Set("Host", curHost)
+			fastReq.SetHost(curHost)
 		}
 		resp, err := util.DoFasthttpRequest(fastReq, false)
 		if err != nil {

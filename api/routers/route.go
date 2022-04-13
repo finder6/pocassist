@@ -105,6 +105,7 @@ func InitRouter(port string) {
 		}
 
 		scanRoutes := v1.Group("/scan")
+		scanRoutes.POST("/passiveraw/", scan2.PassiveRaw)
 		scanRoutes.Use(jwt.JWT())
 		{
 			scanRoutes.POST("/url/", scan2.Url)

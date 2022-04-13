@@ -50,6 +50,11 @@ func JBossAdminConsoleWeakPass(args *ScriptScanArgs) (*util.ScanResult, error) {
 	fastReq.Header.Set("Connection", "keep-alive")
 	fastReq.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
+	if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+		curHost := args.Host + ":" + fmt.Sprint(args.Port)
+		fastReq.Header.Set("Host", curHost)
+		fastReq.SetHost(curHost)
+	}
 	resp1, err := util.DoFasthttpRequest(fastReq,false)
 
 	if err != nil {
@@ -84,6 +89,12 @@ func JBossAdminConsoleWeakPass(args *ScriptScanArgs) (*util.ScanResult, error) {
 
 
 	// 跟随跳转
+
+	if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+		curHost := args.Host + ":" + fmt.Sprint(args.Port)
+		fastReq.Header.Set("Host", curHost)
+		fastReq.SetHost(curHost)
+	}
 	resp2, err := util.DoFasthttpRequest(fastReq, true)
 	if err != nil {
 		util.ResponsePut(resp2)

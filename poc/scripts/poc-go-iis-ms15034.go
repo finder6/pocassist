@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/jweny/pocassist/pkg/cel/proto"
 	"github.com/jweny/pocassist/pkg/util"
 	"github.com/valyala/fasthttp"
@@ -21,6 +22,11 @@ func MS15034(args *ScriptScanArgs) (*util.ScanResult, error) {
 	fastReq.Header.SetMethod(fasthttp.MethodGet)
 	fastReq.Header.Set("Range", "bytes=0-18446744073709551615")
 
+	if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+		curHost := args.Host + ":" + fmt.Sprint(args.Port)
+		fastReq.Header.Set("Host", curHost)
+		fastReq.SetHost(curHost)
+	}
 	resp, err := util.DoFasthttpRequest(fastReq,false)
 	if err != nil {
 		util.ResponsePut(resp)

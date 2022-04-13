@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"github.com/jweny/pocassist/pkg/cel/proto"
 	"github.com/jweny/pocassist/pkg/util"
 	"github.com/valyala/fasthttp"
@@ -25,6 +26,12 @@ func JBossInvokerServletRemoteCodeExec(args *ScriptScanArgs) (*util.ScanResult, 
 	} {
 		rawUrl := ConstructUrl(args, uri)
 		fastReq.SetRequestURI(rawUrl)
+
+		if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+			curHost := args.Host + ":" + fmt.Sprint(args.Port)
+			fastReq.Header.Set("Host", curHost)
+			fastReq.SetHost(curHost)
+		}
 		resp, err := util.DoFasthttpRequest(fastReq, true)
 		if err != nil {
 			return nil, err

@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"github.com/jweny/pocassist/pkg/cel/proto"
 	"github.com/jweny/pocassist/pkg/util"
 	"github.com/valyala/fasthttp"
@@ -27,6 +28,11 @@ func DedecmsBakeUpFileFound(args *ScriptScanArgs) (*util.ScanResult, error) {
 
 			fastReq.SetRequestURI(rawUrl)
 
+			if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+				curHost := args.Host + ":" + fmt.Sprint(args.Port)
+				fastReq.Header.Set("Host", curHost)
+				fastReq.SetHost(curHost)
+			}
 			resp, err := util.DoFasthttpRequest(fastReq, true)
 			if err != nil {
 				util.ResponsePut(resp)
@@ -35,9 +41,7 @@ func DedecmsBakeUpFileFound(args *ScriptScanArgs) (*util.ScanResult, error) {
 			if resp.Status == 200 {
 				respList = append(respList, resp)
 				bodyString := string(resp.Body)
-				if strings.Contains(bodyString,"admin") ||
-					strings.Contains(bodyString,"密码") ||
-					strings.Contains(bodyString,"INSERT INTO"){
+				if strings.Contains(bodyString,"INSERT INTO") {
 					return util.VulnerableHttpResult(rawUrl, "", respList),nil
 				}
 			}

@@ -3,6 +3,7 @@ package scripts
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"github.com/jweny/pocassist/pkg/cel/proto"
 	"github.com/jweny/pocassist/pkg/util"
 	"github.com/valyala/fasthttp"
@@ -32,6 +33,11 @@ func TomcatWeakPass(args *ScriptScanArgs) (*util.ScanResult, error) {
 		authValue := "Basic " + base64.StdEncoding.EncodeToString([]byte(value))
 		fastReq.Header.Set("Authorization", authValue)
 
+		if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+			curHost := args.Host + ":" + fmt.Sprint(args.Port)
+			fastReq.Header.Set("Host", curHost)
+			fastReq.SetHost(curHost)
+		}
 		resp, err := util.DoFasthttpRequest(fastReq, true)
 		if err != nil {
 			return nil, err

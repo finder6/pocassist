@@ -86,6 +86,7 @@ func (controller *PocController) DoSingleRuleRequest(rule *Rule) (*proto.Respons
 	fastReq := controller.Request.Fast
 	// fixReq : 根据规则对原始请求进行变形
 	fixedFastReq := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(fixedFastReq)
 	fastReq.CopyTo(fixedFastReq)
 	curPath := string(fixedFastReq.URI().Path())
 
@@ -108,6 +109,10 @@ func (controller *PocController) DoSingleRuleRequest(rule *Rule) (*proto.Respons
 			// 去掉规则中的的"/" 再拼
 			curPath = fmt.Sprint(curPath, strings.TrimPrefix(rule.Path, "/"))
 		} else {
+			// 去掉最后的/any
+			if curPath != "" {
+				curPath = curPath[0:strings.LastIndex(curPath, "/")]
+			}
 			curPath = fmt.Sprint(curPath, "/" ,strings.TrimPrefix(rule.Path, "/"))
 		}
 	// server级
@@ -153,6 +158,7 @@ func (controller *PocController) SingleRule(rule *Rule, debug bool) (bool, error
 	}
 	// 替换 set
 	rule.ReplaceSet(controller.CEL.ParamMap)
+	
 	// 根据原始请求 + rule 生成并发起新的请求 http
 	resp, err := controller.DoSingleRuleRequest(rule)
 	if err != nil {

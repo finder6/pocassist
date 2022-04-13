@@ -3,6 +3,8 @@ package rule
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"github.com/jweny/pocassist/pkg/db"
 	log "github.com/jweny/pocassist/pkg/logging"
 	"github.com/jweny/pocassist/pkg/util"
@@ -38,6 +40,23 @@ func (item *ScanItem) Verify() error {
 
 
 func WriteTaskResult(scanItem *ScanItem, result *util.ScanResult) {
+	// 过滤数据库已经存在的漏洞, server型截取第三个/之前，directory型截断最后一个/后的
+	origUrl := scanItem.OriginalReq.URL
+	targetUrl := result.Target
+	if scanItem.Plugin.Affects == "server" {
+		targetUrl = origUrl.Scheme + "://" + origUrl.Host
+	} else if scanItem.Plugin.Affects == "directory" {
+		targetUrl = origUrl.Scheme + "://" + origUrl.Host
+		if origUrl.Path != "" {
+			targetUrl += origUrl.Path[0:strings.LastIndex(origUrl.Path, "/")]
+		}
+	}
+	pluginId := scanItem.Plugin.VulId
+	results := db.GetSingleResult(targetUrl, pluginId)
+	if len(results) > 0 {
+		return
+	}
+
 	detail, _:= json.Marshal(result)
 	res := db.Result{
 		Detail:   detail,
@@ -105,6 +124,19 @@ func RunPoc(inter interface{}, debug bool) (result *util.ScanResult, err error) 
 			for field := range originalParamFields {
 				for _, payload := range paramPayloadList {
 					log.Info("[rule/poc.go:RunPoc param payload]", payload)
+					// 转换payload变量
+					varMap := controller.CEL.ParamMap
+					for setKey, setValue := range varMap {
+						// 过滤掉 map
+						_, isMap := setValue.(map[string]string)
+						if isMap {
+							continue
+						}
+						value := fmt.Sprintf("%v", setValue)
+						// 替换payload中的 自定义字段
+						payload = strings.ReplaceAll(strings.TrimSpace(payload), "{{"+setKey+"}}", value)
+					}
+
 					err = requestController.FixQueryParams(field, payload, controller.Plugin.Affects)
 					if err != nil {
 						log.Error("[rule/poc.go:RunPoc fix request params error] ", err)

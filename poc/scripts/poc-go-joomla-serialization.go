@@ -45,6 +45,11 @@ func JoomlaSerialization(args *ScriptScanArgs) (*util.ScanResult, error) {
 	fastReq.Header.SetUserAgent(payload)
 	fastReq.Header.SetMethod(http.MethodGet)
 
+	if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+		curHost := args.Host + ":" + fmt.Sprint(args.Port)
+		fastReq.Header.Set("Host", curHost)
+		fastReq.SetHost(curHost)
+	}
 	resp1, err := util.DoFasthttpRequest(fastReq, false)
 	if err != nil {
 		util.ResponsePut(resp1)
@@ -67,6 +72,11 @@ func JoomlaSerialization(args *ScriptScanArgs) (*util.ScanResult, error) {
 		}
 	}
 
+	if fastReq.Header.Host() == nil || len(fastReq.Header.Host()) == 0 {
+		curHost := args.Host + ":" + fmt.Sprint(args.Port)
+		fastReq.Header.Set("Host", curHost)
+		fastReq.SetHost(curHost)
+	}
 	resp2, err := util.DoFasthttpRequest(fastReq,true)
 	if err != nil {
 		util.ResponsePut(resp2)

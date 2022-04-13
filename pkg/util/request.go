@@ -222,7 +222,7 @@ func ParseFasthttpResponse(originalResp *fasthttp.Response, req *fasthttp.Reques
 
 func DoFasthttpRequest(req *fasthttp.Request, redirect bool) (*proto.Response, error) {
 	LimitWait()
-	defer fasthttp.ReleaseRequest(req)
+	
 	bodyLen := len(req.Body())
 	if bodyLen > 0 {
 		req.Header.Set("Content-Length", strconv.Itoa(bodyLen))
