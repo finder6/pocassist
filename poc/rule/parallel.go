@@ -84,7 +84,7 @@ func LoadDbPlugin(lodeType string, array []string) ([]Plugin, error) {
 	switch lodeType {
 	case LoadMulti:
 		// 多个
-		tx := db.GlobalDB.Where("vul_id IN ? AND enable = ?", array, 1).Find(&dbPluginList)
+		tx := db.GlobalDB.Where("? like ('%' || vul_id || '%') AND enable = ?", array, 1).Find(&dbPluginList)
 		if tx.Error != nil {
 			log.Error("[rule/parallel.go:LoadDbPlugin load multi err]", tx.Error)
 			return nil, tx.Error
