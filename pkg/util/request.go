@@ -443,15 +443,15 @@ func GenOriginalReq(target string) (*http.Request, error) {
 }
 
 func GetOriginalReqBody(originalReq *http.Request) ([]byte, error){
-	var data []byte
 	if originalReq.Body != nil && originalReq.Body != http.NoBody {
 		data, err := ioutil.ReadAll(originalReq.Body)
 		if err != nil {
 			return nil, err
 		}
 		originalReq.Body = ioutil.NopCloser(bytes.NewBuffer(data))
+		return data, nil
 	}
-	return data, nil
+	return nil, nil
 }
 
 
