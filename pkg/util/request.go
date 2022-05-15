@@ -3,13 +3,9 @@ package util
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
-	"github.com/jweny/pocassist/pkg/cel/proto"
-	"github.com/jweny/pocassist/pkg/conf"
-	log "github.com/jweny/pocassist/pkg/logging"
-	"github.com/valyala/fasthttp"
-	"golang.org/x/time/rate"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -19,19 +15,36 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"encoding/hex"
+
+	"github.com/jweny/pocassist/pkg/cel/proto"
+	"github.com/jweny/pocassist/pkg/conf"
+	log "github.com/jweny/pocassist/pkg/logging"
+	"github.com/valyala/fasthttp"
+	"golang.org/x/time/rate"
 )
 
 // 限制请求速率
 var limiter *rate.Limiter
+var responseCache map[string]*fasthttp.Response 
 
 func InitRate() {
 	msQps := conf.GlobalConfig.HttpConfig.MaxQps  / 10
 	limit := rate.Every(100 * time.Millisecond)
 	limiter = rate.NewLimiter(limit, msQps)
+
+	responseCache = make(map[string]*fasthttp.Response)
 }
 
 func LimitWait() {
 	limiter.Wait(context.Background())
+}
+
+// 32位md5加密后字符串
+func Md5(str string) string {
+    h := md5.New()
+    h.Write([]byte(str))
+    return hex.EncodeToString(h.Sum(nil))
 }
 
 
@@ -230,33 +243,55 @@ func DoFasthttpRequest(req *fasthttp.Request, redirect bool) (*proto.Response, e
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 	}
-
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-
+	
 	var err error
-
-	if redirect {
-		// 跟随重定向 最大跳转数从conf中加载
-		maxRedirects := conf.GlobalConfig.HttpConfig.MaxRedirect
-		err = fasthttpClient.DoRedirects(req, resp, maxRedirects)
+	var resp *fasthttp.Response
+	var cookieString string
+	req.Header.VisitAllCookie(func(key, value []byte) {
+		cookieString += string(key)+"="+string(value)+";"
+	})
+	requestMd5String := Md5(strconv.Itoa(len(req.Header.String())) + string(req.Header.Method())+"^"+cookieString+"^"+req.URI().String()+"^"+string(req.Body()))
+	if responseCache[requestMd5String] != nil {
+		log.Info("same request md5 = " + requestMd5String)
+		resp = responseCache[requestMd5String]
 	} else {
-		// 不跟随重定向
-		timeout := conf.GlobalConfig.HttpConfig.HttpTimeout
-		err = fasthttpClient.DoTimeout(req, resp, time.Duration(timeout)*time.Second)
-	}
-	if err != nil {
-		log.Error("util/requests.go:DoFasthttpRequest fasthttp client doRequest error", string(req.RequestURI()),err)
-		return nil, err
+		fmt.Println("request string md5 = ", requestMd5String)
+		fmt.Println(strconv.Itoa(len(req.Header.String())) + string(req.Header.Method())+"^"+cookieString+"^"+req.URI().String()+"^"+string(req.Body()))
+		resp = fasthttp.AcquireResponse()
+		defer fasthttp.ReleaseResponse(resp)
+
+		if redirect {
+			// 跟随重定向 最大跳转数从conf中加载
+			maxRedirects := conf.GlobalConfig.HttpConfig.MaxRedirect
+			err = fasthttpClient.DoRedirects(req, resp, maxRedirects)
+		} else {
+			// 不跟随重定向
+			timeout := conf.GlobalConfig.HttpConfig.HttpTimeout
+			err = fasthttpClient.DoTimeout(req, resp, time.Duration(timeout)*time.Second)
+		}
+		if err != nil {
+			log.Error("util/requests.go:DoFasthttpRequest fasthttp client doRequest error", string(req.RequestURI()),err)
+			return nil, err
+		}
+
+		// 处理响应 body: gzip deflate 解包
+		fixBody, err := UnzipResponseBody(resp)
+		if err != nil {
+			log.Error("util/requests.go:DoFasthttpRequest fasthttp client dealResponseBody error", string(req.RequestURI()),err)
+			return nil, err
+		}
+		resp.SetBody(fixBody)
+
+		// 缓存响应
+		if resp.StatusCode() <= 500 && string(req.URI().Host()) != "api.ceye.io" {
+			var newResp *fasthttp.Response = new(fasthttp.Response)
+			resp.CopyTo(newResp)
+			*newResp = *resp
+			responseCache[requestMd5String] = newResp;
+		}
 	}
 
-	// 处理响应 body: gzip deflate 解包
-	fixBody, err := UnzipResponseBody(resp)
-	if err != nil {
-		log.Error("util/requests.go:DoFasthttpRequest fasthttp client dealResponseBody error", string(req.RequestURI()),err)
-		return nil, err
-	}
-	resp.SetBody(fixBody)
+
 	curResp, err := ParseFasthttpResponse(resp, req)
 	// 添加请求和响应报文
 	if err != nil {
